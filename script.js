@@ -1,4 +1,4 @@
-const WA_NUMBER="919999999999"; // Replace with your WhatsApp number, e.g. 919876543210
+const WA_NUMBER="9152309033"; // Replace with your WhatsApp number, e.g. 919876543210
 
 const navHTML=`<nav><a class="logo" href="index.html">Pixora<span>AI</span></a><button class="menu" id="menu">☰</button><div class="nav-links" id="navLinks"><a href="index.html">Home</a><a href="services.html">Services</a><a href="portfolio.html">Portfolio</a><a href="pricing.html">Pricing</a><a href="contact.html">Contact</a></div></nav>`;
 document.getElementById("site-nav").innerHTML=navHTML;
