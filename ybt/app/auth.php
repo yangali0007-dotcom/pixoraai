@@ -1,0 +1,15 @@
+<?php
+declare(strict_types=1);
+function current_user(): ?array { static $loaded=false,$user=null; if(!$loaded) { $loaded=true; if(isset($_SESSION['user_id'])) $user=one('SELECT * FROM users WHERE id=? AND active=1',[(int)$_SESSION['user_id']]); } return $user; }
+function require_login(): void { if(!current_user()||time()-($_SESSION['last_activity']??0)>1800||!hash_equals(hash('sha256',current_user()['password_hash']),(string)($_SESSION['auth_version']??''))) { unset($_SESSION['user_id']); flash('Please sign in to continue.','info'); redirect('login.php'); } $_SESSION['last_activity']=time(); }
+function can(string $permission): bool { $u=current_user(); return $u && ($u['role']==='owner'||in_array($permission,json_decode($u['permissions'],true),true)); }
+function require_permission(string $permission): void { require_login(); if(!can($permission)) { http_response_code(403); require_once __DIR__.'/layout.php'; page_start('Access restricted','Your account does not have permission to open this section.'); echo '<div class="panel empty">'.icon('shield-check').'<h2>This section is restricted</h2><p>Ask your business Owner to update your access.</p><a class="btn" href="profile.php">Your profile</a></div>'; page_end(); exit; } }
+function require_owner(): void { require_login(); if(current_user()['role']!=='owner') { http_response_code(403); exit('Only the business Owner can perform this action.'); } }
+function login_user(string $email,string $password): bool {
+    $fingerprint=hash('sha256',strtolower(trim($email)).'|'.($_SERVER['REMOTE_ADDR']??'local'));$ipFingerprint=hash('sha256','ip|'.($_SERVER['REMOTE_ADDR']??'local'));
+    if((int)scalar('SELECT COUNT(*) FROM login_attempts WHERE fingerprint=? AND created_at > DATE_SUB(NOW(),INTERVAL 15 MINUTE)',[$fingerprint])>=5||(int)scalar('SELECT COUNT(*) FROM login_attempts WHERE fingerprint=? AND created_at > DATE_SUB(NOW(),INTERVAL 15 MINUTE)',[$ipFingerprint])>=30) { return false; }
+    $u=one('SELECT * FROM users WHERE email=? AND active=1',[strtolower(trim($email))]);
+    $valid=password_verify($password,$u['password_hash']??'$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2uheWG/igi.');
+    if(!$u||!$valid) { query('INSERT INTO login_attempts(fingerprint) VALUES(?)',[$fingerprint]); query('INSERT INTO login_attempts(fingerprint) VALUES(?)',[$ipFingerprint]); if($u) query('INSERT INTO activity_logs(business_id,user_id,action,entity,entity_id,details) VALUES(?,?,?,?,?,?)',[$u['business_id'],$u['id'],'login.failed','user',$u['id'],'{}']); return false; }
+    session_regenerate_id(true); $_SESSION=['user_id'=>$u['id'],'last_activity'=>time(),'auth_version'=>hash('sha256',$u['password_hash']),'csrf'=>bin2hex(random_bytes(32))]; query('UPDATE users SET last_login=NOW() WHERE id=?',[$u['id']]); query('DELETE FROM login_attempts WHERE fingerprint=?',[$fingerprint]); query('INSERT INTO activity_logs(business_id,user_id,action,entity,entity_id,details) VALUES(?,?,?,?,?,?)',[$u['business_id'],$u['id'],'login','user',$u['id'],'{}']); return true;
+}
