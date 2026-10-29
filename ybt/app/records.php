@@ -22,11 +22,13 @@ function financial_summary(string $start,string $end): array {
     $out=one("SELECT COALESCE(SUM(d.total-COALESCE(p.paid,0)),0) outstanding, COALESCE(SUM(CASE WHEN d.due_date<CURRENT_DATE THEN d.total-COALESCE(p.paid,0) ELSE 0 END),0) overdue,COUNT(*) count FROM documents d LEFT JOIN (SELECT document_id,SUM(amount) paid FROM payments WHERE business_id=? AND reversed_at IS NULL GROUP BY document_id) p ON p.document_id=d.id WHERE d.business_id=? AND d.type='invoice' AND d.status='Issued' AND d.issue_date BETWEEN ? AND ?",[$b,$b,$start,$end]);
     return ['revenue'=>$revenue,'cash'=>$cash,'expenses'=>$expenses,'net'=>(float)$cash-(float)$expenses]+$out;
 }
-function document_list_sql(string $type,string $search='',?array $dates=null,string $status=''): array {
+function document_list_sql(string $type,string $search='',?array $dates=null,string $status='',bool $outstandingOnly=false): array {
     $sql="SELECT d.*,c.name customer_name,c.company,(SELECT COALESCE(SUM(p.amount),0) FROM payments p WHERE p.document_id=d.id AND p.business_id=d.business_id AND p.reversed_at IS NULL) paid FROM documents d JOIN customers c ON c.id=d.customer_id AND c.business_id=d.business_id WHERE d.business_id=? AND d.type=?";
     $params=[bid(),$type];if($search!==''){$sql.=' AND (d.number LIKE ? OR c.name LIKE ?)';$params[]='%'.$search.'%';$params[]='%'.$search.'%';}if($dates){$sql.=' AND d.issue_date BETWEEN ? AND ?';$params=[...$params,...$dates];}
     $sql="SELECT source.*,CASE WHEN type='quotation' THEN status WHEN status IN ('Draft','Void') THEN status WHEN paid>=total THEN 'Paid' WHEN paid>0 THEN 'Partially Paid' WHEN due_date<CURRENT_DATE THEN 'Overdue' ELSE 'Issued' END derived_status FROM ($sql) source";
-    if($status!==''){$sql="SELECT * FROM ($sql) filtered WHERE derived_status=?";$params[]=$status;}return [$sql,$params];
+    if($status!==''){$sql="SELECT * FROM ($sql) filtered WHERE derived_status=?";$params[]=$status;}
+    if($outstandingOnly)$sql="SELECT * FROM ($sql) outstanding WHERE status='Issued' AND paid<total";
+    return [$sql,$params];
 }
-function list_documents(string $type,string $search='',int $limit=10,int $offset=0,?array $dates=null,string $status=''): array {[$sql,$params]=document_list_sql($type,$search,$dates,$status);return rows($sql.' ORDER BY issue_date DESC,id DESC LIMIT '.max(1,min(100,$limit)).' OFFSET '.max(0,$offset),$params);}
+function list_documents(string $type,string $search='',int $limit=10,int $offset=0,?array $dates=null,string $status='',bool $outstandingOnly=false): array {[$sql,$params]=document_list_sql($type,$search,$dates,$status,$outstandingOnly);return rows($sql.' ORDER BY issue_date DESC,id DESC LIMIT '.max(1,min(100,$limit)).' OFFSET '.max(0,$offset),$params);}
 function count_documents(string $type,string $search='',?array $dates=null,string $status=''): int {[$sql,$params]=document_list_sql($type,$search,$dates,$status);return (int)scalar("SELECT COUNT(*) FROM ($sql) counted",$params);}

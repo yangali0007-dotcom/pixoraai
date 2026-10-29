@@ -65,6 +65,10 @@ Open `http://127.0.0.1:8080` and sign in with the account you just created. Keep
 
 For Apache, configure a virtual host with `DocumentRoot` pointing to the absolute `ybt/public` directory. Never serve the repository or `ybt/` itself. `app/`, `config/`, `vendor/`, `database/`, and private storage must remain outside public access.
 
+### HTTPS behind a reverse proxy
+
+For a public HTTPS deployment where a proxy terminates TLS, set `'https' => true` in private `config/local.php` (or set `YBT_HTTPS=1` in the application environment). This marks session cookies Secure even when the proxy connects to PHP over HTTP. Leave it false for local HTTP development. Forwarded headers alone are not trusted.
+
 ## 6. Explore and customize
 
 - Dashboard: try this month, previous month and custom dates.
@@ -88,7 +92,7 @@ Privately give the account holder the resulting relative reset URL under the app
 
 ## Local verification
 
-Run `composer test` from `ybt/` for database-backed integration tests. They create synthetic businesses in a transaction and roll back. Never point testing at a live production database.
+Run `composer test` from `ybt/` for database-backed integration tests. They create synthetic businesses in a transaction and roll back. Run `php tests/concurrency.php` for the two-connection sequence and backup snapshot regressions; this check commits only its synthetic fixture and removes it in a `finally` block. Never point testing at a live production database.
 
 ## Release status
 

@@ -28,6 +28,38 @@ check(count_documents('invoice')===2,'SQL document count includes all fixture in
 query('UPDATE customers SET is_demo=0 WHERE id=?',[$c]);$demoCustomer=save_record('customers',['name'=>'Disposable demo','address'=>'','notes'=>'']);query('UPDATE customers SET is_demo=1 WHERE id=?',[$demoCustomer]);$demoInvoice=create_document('invoice',['customer_id'=>$demoCustomer,'issue_date'=>$date,'due_date'=>$date,'notes'=>''],$input);query('UPDATE documents SET is_demo=1 WHERE id=?',[$demoInvoice]);issue_document($demoInvoice);$beforeRevenue=financial_summary($date,$date)['revenue'];remove_demo();check(one('SELECT id FROM customers WHERE id=?',[$demoCustomer])===null,'Successful cleanup removes marked demo customer');check(one('SELECT id FROM documents WHERE id=?',[$demoInvoice])===null,'Successful cleanup removes demo document and items');check(count_documents('invoice')===2,'Successful demo cleanup preserves real invoices');check(scaled($beforeRevenue)-scaled(financial_summary($date,$date)['revenue'])===5308,'Demo cleanup immediately refreshes authoritative metrics');
 
 
+// Regression coverage for the review repairs, isolated from the existing fixtures.
+check(scalar('SELECT @@session.time_zone')===date('P'),'SQL session uses the PHP timezone offset');
+check(scalar('SELECT CURRENT_DATE')===date('Y-m-d'),'SQL and PHP agree on the current date');
+check(abs(strtotime((string)scalar('SELECT NOW()'))-time())<=2,'SQL and PHP agree on the local clock');
+check(db()->inTransaction(),'Backup preserves the caller-owned transaction');
+db()->exec('SAVEPOINT repair_fixtures');
+$backupCount=(int)scalar('SELECT COUNT(*) FROM backup_records WHERE business_id=?',[bid()]);
+$backupFiles=glob($config['storage'].'/backups/*.json')?:[];
+save_setting('large_backup_a',str_repeat('x',8*1024*1024));save_setting('large_backup_b',str_repeat('y',8*1024*1024));
+rejects(fn()=>create_backup(),'Oversized encoded backup rejected before creation');
+check((int)scalar('SELECT COUNT(*) FROM backup_records WHERE business_id=?',[bid()])===$backupCount,'Oversized backup creates no history row');
+check((glob($config['storage'].'/backups/*.json')?:[])===$backupFiles,'Oversized backup creates no file');
+db()->exec('ROLLBACK TO SAVEPOINT repair_fixtures');
+$_GET=['period'=>'custom','from'=>'2020-02-01','to'=>'2020-02-29'];
+$aiItems=[['description'=>'AI outstanding fixture','quantity'=>'1','rate'=>'10']];$eligible=[];
+for($i=0;$i<103;$i++){
+    $aid=create_document('invoice',['customer_id'=>$c,'issue_date'=>'2020-02-10','due_date'=>'2020-02-15'],$aiItems);issue_document($aid);$eligible[]=document_record($aid)['number'];
+}
+$partialId=$aid;record_payment($partialId,'3','2020-02-11','Cash','',bin2hex(random_bytes(32)));
+for($i=0;$i<101;$i++)create_document('invoice',['customer_id'=>$c,'issue_date'=>'2020-02-29','due_date'=>'2020-02-29'],$aiItems);
+$paidId=create_document('invoice',['customer_id'=>$c,'issue_date'=>'2020-02-28','due_date'=>'2020-02-29'],$aiItems);issue_document($paidId);record_payment($paidId,'10','2020-02-28','Cash','',bin2hex(random_bytes(32)));
+$voidId=create_document('invoice',['customer_id'=>$c,'issue_date'=>'2020-02-28','due_date'=>'2020-02-29'],$aiItems);issue_document($voidId);query("UPDATE documents SET status='Void' WHERE id=?",[$voidId]);
+$outsideId=create_document('invoice',['customer_id'=>$c,'issue_date'=>'2020-03-01','due_date'=>'2020-03-15'],$aiItems);issue_document($outsideId);
+$context=ai_context('outstanding');
+check($context['period']===['2020-02-01','2020-02-29'],'AI outstanding reports the selected period');
+check(count($context['invoices'])===100&&$context['limit']===100,'Outstanding filtering occurs before the 100-result limit');
+check(array_column($context['invoices'],'number')===array_slice(array_reverse($eligible),0,100),'AI excludes drafts, paid, void and outside-period invoices');
+check($context['invoices'][0]['outstanding']==='7.00','AI preserves partially paid invoice balances');
+check(array_keys($context['invoices'][0])===['number','customer','due_date','total','paid','outstanding'],'AI outstanding response fields preserved');
+db()->exec('ROLLBACK TO SAVEPOINT repair_fixtures');$_GET=[];
+
+
 foreach(rows('SELECT filename FROM backup_records WHERE business_id=?',[bid()]) as $b)$files[]=$config['storage'].'/backups/'.$b['filename'];
 }catch(Throwable $e){$failed++;fwrite(STDERR,"ERROR ".$e->getMessage()."\n".$e->getTraceAsString()."\n");}
 finally{if(db()->inTransaction())db()->rollBack();$newFiles=array_diff(glob($config['storage'].'/backups/*.json')?:[],$initialFiles);foreach(array_unique([...$files,...$newFiles]) as $path)if(is_file($path))unlink($path);}

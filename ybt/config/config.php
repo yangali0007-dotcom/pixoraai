@@ -9,4 +9,6 @@ return array_replace([
     'key' => getenv('YBT_APP_KEY') ?: '',
     'environment' => getenv('YBT_ENV') ?: 'local',
     'timezone' => 'Asia/Kolkata',
+    // Enable when the public site uses HTTPS, including TLS terminated by a proxy.
+    'https' => getenv('YBT_HTTPS') === '1',
 ], $local);

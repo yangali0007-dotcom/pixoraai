@@ -26,7 +26,9 @@ function create_document(string $type,array $data,array $input): int {
     $calc=calculate_items($input); foreach($calc['items'] as $item) if($item['product_id']&&!one("SELECT id FROM products WHERE id=? AND business_id=? AND status='Active'",[$item['product_id'],bid()])) throw new DomainException('Choose an active product.');
     return transaction(function() use($type,$data,$issue,$due,$calc) {
         query('SELECT id FROM businesses WHERE id=? FOR UPDATE',[bid()]);
-        $seq=(int)setting($type.'_sequence',1000)+1; save_setting($type.'_sequence',$seq); $number=($type==='invoice'?'INV':'QUO').'-'.str_pad((string)$seq,4,'0',STR_PAD_LEFT);
+        $sequenceKey=$type.'_sequence';
+        $value=scalar('SELECT value FROM business_settings WHERE business_id=? AND setting_key=? FOR UPDATE',[bid(),$sequenceKey]);
+        $seq=(int)($value===false?1000:json_decode($value,true))+1; save_setting($sequenceKey,$seq); $number=($type==='invoice'?'INV':'QUO').'-'.str_pad((string)$seq,4,'0',STR_PAD_LEFT);
         query('INSERT INTO documents(business_id,customer_id,type,number,issue_date,due_date,subtotal,discount_total,tax_total,total,notes) VALUES(?,?,?,?,?,?,?,?,?,?,?)',[bid(),$data['customer_id'],$type,$number,$issue,$due,$calc['totals']['subtotal'],$calc['totals']['discount_total'],$calc['totals']['tax_total'],$calc['totals']['total'],mb_substr((string)($data['notes']??''),0,4000)]); $id=(int)db()->lastInsertId();
         foreach($calc['items'] as $i) query('INSERT INTO document_items(document_id,product_id,description,quantity,rate,discount_rate,tax_rate,subtotal,discount_total,tax_total,total) VALUES(?,?,?,?,?,?,?,?,?,?,?)',[$id,...array_values($i)]);
         audit($type.'.draft_created','document',$id); return $id;
