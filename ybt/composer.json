@@ -1,0 +1,18 @@
+{
+  "name": "ybt/management",
+  "description": "YBT Management Software \u2014 PHP business workspace",
+  "type": "project",
+  "require": {
+    "php": "^8.3",
+    "ext-pdo": "*",
+    "ext-pdo_mysql": "*",
+    "ext-mbstring": "*",
+    "ext-sodium": "*",
+    "ext-curl": "*",
+    "dompdf/dompdf": "^3.1"
+  },
+  "scripts": {
+    "test": "php tests/run.php"
+  },
+  "license": "proprietary"
+}

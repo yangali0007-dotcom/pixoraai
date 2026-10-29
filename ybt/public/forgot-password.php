@@ -1,0 +1,3 @@
+<?php
+require dirname(__DIR__).'/app/bootstrap.php';
+?><!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Account recovery · YBT</title><link rel="stylesheet" href="assets/css/app.css"></head><body><main><section class="panel form-panel"><h1>Let’s get you back in.</h1><p>Contact your business Owner or server administrator to receive a password reset link. For local installations, your administrator can use the protected reset command in the installation guide.</p><a class="btn primary" href="login.php">Return to sign in</a></section></main></body></html>
