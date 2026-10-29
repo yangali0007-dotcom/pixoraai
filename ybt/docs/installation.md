@@ -67,7 +67,7 @@ For Apache, configure a virtual host with `DocumentRoot` pointing to the absolut
 
 ### HTTPS behind a reverse proxy
 
-For a public HTTPS deployment where a proxy terminates TLS, set `'https' => true` in private `config/local.php` (or set `YBT_HTTPS=1` in the application environment). This marks session cookies Secure even when the proxy connects to PHP over HTTP. Leave it false for local HTTP development. Forwarded headers alone are not trusted.
+For a public HTTPS deployment where a proxy terminates TLS, set `'https' => true` in private `config/local.php`. Alternatively, set `YBT_HTTPS=1` in the application environment if `https` is absent from `config/local.php`. An explicit `'https' => false` in that file overrides `YBT_HTTPS=1`; remove that setting or change it to `true` when deploying behind a TLS-terminating proxy. This marks session cookies Secure even when the proxy connects to PHP over HTTP. Leave HTTPS disabled for local HTTP development. Forwarded headers alone are not trusted.
 
 ## 6. Explore and customize
 
